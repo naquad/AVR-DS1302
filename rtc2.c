@@ -67,7 +67,7 @@
 
 // Default global pointer memory {{{
 #if RTC2_DEFAULT && (RTC2_READ || RTC2__WRITE)
-static rtc2_datetime_t rtc2_default;
+static rtc2_datetime_t rtc2_default = {0};
 #endif
 // }}}
 
