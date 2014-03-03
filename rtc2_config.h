@@ -5,8 +5,8 @@
 #ifndef RTC2_PORT
 
 // port where DS1302 is connected. currently only one port mode
-// is supported :( e.g. you should connect all lines from DS1302 
-// to the pin bank aka port
+// is supported, e.g. you should connect all lines from DS1302 
+// to one port
 #define RTC2_PORT PORTC
 #define RTC2_PIN  PINC
 #define RTC2_DDR  DDRC
@@ -24,6 +24,9 @@
 #define RTC2_MEM_END 0xFD
 
 #endif
+
+// following defines disable/enable library features.
+// to save some space you can disable unused functionality.
 
 // define global variable?
 #ifndef RTC2_DEFAULT

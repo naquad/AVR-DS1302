@@ -8,6 +8,41 @@
 #include <string.h>
 #endif
 
+// Registers addresses from datasheet {{{
+#define RTC2_SECONDS_READ  0x81
+#define RTC2_SECONDS_WRITE 0x80
+
+#define RTC2_MINUTES_READ  0x83
+#define RTC2_MINUTES_WRITE 0x82
+
+#define RTC2_HOURS_READ  0x85
+#define RTC2_HOURS_WRITE 0x84
+
+#define RTC2_DATE_READ  0x87
+#define RTC2_DATE_WRITE 0x86
+
+#define RTC2_MONTH_READ  0x89
+#define RTC2_MONTH_WRITE 0x88
+
+#define RTC2_WDAY_READ  0x8B
+#define RTC2_WDAY_WRITE 0x8A
+
+#define RTC2_YEAR_READ  0x8D
+#define RTC2_YEAR_WRITE 0x8C
+
+#define RTC2_WP_READ  0x8F
+#define RTC2_WP_WRITE 0x8E
+
+#define RTC2_CHARGER_READ  0x91
+#define RTC2_CHARGER_WRITE 0x90
+
+#define RTC2_BURST_READ  0xBF
+#define RTC2_BURST_WRITE 0xBE
+
+#define RTC2_BURST_MEM_READ  0xFF
+#define RTC2_BURST_MEM_WRITE 0xFE
+// }}}
+
 // RTC2 utility macro handling I/O {{{
 #define RTC2_IO_OUTPUT (RTC2_DDR |= _BV(RTC2_IO))
 #define RTC2_IO_INPUT (RTC2_DDR &= ~_BV(RTC2_IO))
@@ -30,7 +65,7 @@
 #define RTC2_STOP_TRANSMISSION { RTC2_CE_LOW; RTC2_CLK_LOW; } while(0)
 // }}}
 
-// Default global variable {{{
+// Default global pointer memory {{{
 #if RTC2_DEFAULT && (RTC2_READ || RTC2__WRITE)
 static rtc2_datetime_t rtc2_default;
 #endif
@@ -38,9 +73,12 @@ static rtc2_datetime_t rtc2_default;
 
 // Initializer. Configures I/O ports and maybe sets up global variable {{{
 void rtc2_init(void){
+  // set all pins to output
   RTC2_DDR |= _BV(RTC2_CE) | _BV(RTC2_CLK) | _BV(RTC2_IO);
+  // and turn them off
   RTC2_PORT &= ~(_BV(RTC2_CE) | _BV(RTC2_CLK) | _BV(RTC2_IO));
 
+  // initialize default global pointer if needed
 #if RTC2_DEFAULT && (RTC2_READ || RTC2__WRITE)
   RTC2_VALUE = &rtc2_default;
 #endif
@@ -133,6 +171,9 @@ void rtc2_preset(rtc2_datetime ptr){
   rtc2_set(ptr, RTC2_ALL_FIELDS);
 }
 
+// encodes given values in BCD for sending to DS1302.
+// we have to cut off higher parts to avoid accidently
+// setting control bits.
 static uint8_t rtc2_store_field(uint8_t field, uint8_t val){
   switch(field){
     case RTC2_SECONDS_WRITE:
@@ -215,6 +256,10 @@ void rtc2_update(rtc2_datetime ptr){
   rtc2_get(ptr, RTC2_ALL_FIELDS);
 }
 
+// decode values received from DS1302 from BCD to bin encoding.
+// see datasheet for details. because some registers
+// contain also control bits we cut off higher parts
+// that are not data.
 static uint8_t rtc2_parse_val(uint8_t field, uint8_t val){
   switch(field){
     case RTC2_SECONDS_READ:
@@ -222,6 +267,7 @@ static uint8_t rtc2_parse_val(uint8_t field, uint8_t val){
       val = (val & 0x0F) + ((val & 0x70) >> 4) * 10;
       break;
     case RTC2_HOURS_READ:
+      // hours format is passed along with the hour itself
       val = (val & RTC2_FORMAT_PM) | ((val & 0x0F) + ((val & 0x10) >> 4) * 10);
       break;
     case RTC2_DATE_READ:
@@ -255,6 +301,7 @@ void rtc2_get(rtc2_datetime ptr, uint8_t fields){
     ptr->seconds = rtc2_parse_val(RTC2_SECONDS_READ, rtc2_read_byte());
     ptr->minutes = rtc2_parse_val(RTC2_MINUTES_READ, rtc2_read_byte());
 
+    // hours format is passed along with the hour itself
     tmp          = rtc2_parse_val(RTC2_HOURS_READ, rtc2_read_byte());
     ptr->format  = tmp & RTC2_FORMAT_PM;
     ptr->hours   = tmp & ~RTC2_FORMAT_PM;
@@ -301,6 +348,7 @@ void rtc2_get(rtc2_datetime ptr, uint8_t fields){
 // RAM access {{{
 #if RTC2_RAM
 
+// RAM has same access method, just different address
 void rtc2_mem_write_byte(uint8_t offset, uint8_t val){
   offset += RTC2_MEM_START_WRITE;
 
@@ -314,9 +362,8 @@ void rtc2_mem_write_byte(uint8_t offset, uint8_t val){
 uint8_t rtc2_mem_read_byte(uint8_t offset){
   offset += RTC2_MEM_START;
   
-  // check for addres validity
   if(RTC2_MEM_READ_INVALID(offset))
-    return 0; // kind of panic here or something
+    return 0;
 
   return rtc2_read(offset);
 }
@@ -354,7 +401,7 @@ void rtc2_mem_read(uint8_t offset, size_t size, void *buffer){
     return;
  
 #if RTC2_BURST
-  if(size > 2 && offset == RTC2_MEM_START){
+  if(size > 1 && offset == RTC2_MEM_START){
     RTC2_START_TRANSMISSION(RTC2_BURST_MEM_READ);
 
     for(; size > 0; offset += 2, --size, ++buffer)
@@ -383,6 +430,8 @@ void rtc2_mem_gets(uint8_t offset, size_t maxlen, char *str){
   if(RTC2_MEM_READ_INVALID(offset))
     return;
 
+  // here we read until 0 byte or up to maxlen - 1
+  // to guarantee we always have a valid C string.
   for(; maxlen > 1; --maxlen, ++str, offset += 2){
     *str = rtc2_read(offset);
 

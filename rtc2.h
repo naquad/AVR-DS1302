@@ -6,46 +6,26 @@
 #include <stddef.h>
 #include "rtc2_config.h"
 
+// Clock formats {{{
 #define RTC2_FORMAT_AM 0x80
 #define RTC2_FORMAT_PM 0xA0
 #define RTC2_FORMAT_24 0x00
+// }}}
 
-#define RTC2_SECONDS_READ  0x81
-#define RTC2_SECONDS_WRITE 0x80
-#define RTC2_SECONDS_FIELD 0x01
+// Available fields for using with rtc2_preset, rtc2_set,
+// rtc2_update, rtc2_get functions {{{
+#define RTC2_SECONDS_FIELD   0x01
+#define RTC2_MINUTES_FIELD   0x02
+#define RTC2_HOURS_FIELD     0x04
+#define RTC2_DATE_FIELD      0x08
+#define RTC2_MONTH_FIELD     0x10
+#define RTC2_WDAY_FIELD      0x20
+#define RTC2_YEAR_FIELD      0x40
 
-#define RTC2_MINUTES_READ  0x83
-#define RTC2_MINUTES_WRITE 0x82
-#define RTC2_MINUTES_FIELD 0x02
+#define RTC2_ALL_FIELDS      0x7F // all fields mean update/preset all above
+// }}}
 
-#define RTC2_HOURS_READ  0x85
-#define RTC2_HOURS_WRITE 0x84
-#define RTC2_HOURS_FIELD 0x04
-
-#define RTC2_DATE_READ  0x87
-#define RTC2_DATE_WRITE 0x86
-#define RTC2_DATE_FIELD 0x08
-
-#define RTC2_MONTH_READ  0x89
-#define RTC2_MONTH_WRITE 0x88
-#define RTC2_MONTH_FIELD 0x10
-
-#define RTC2_WDAY_READ  0x8B
-#define RTC2_WDAY_WRITE 0x8A
-#define RTC2_WDAY_FIELD 0x20
-
-#define RTC2_YEAR_READ  0x8D
-#define RTC2_YEAR_WRITE 0x8C
-#define RTC2_YEAR_FIELD 0x40
-
-#define RTC2_WP_READ  0x8F
-#define RTC2_WP_WRITE 0x8E
-
-#define RTC2_ALL_FIELDS 0x7F
-
-#define RTC2_CHARGER_READ  0x91
-#define RTC2_CHARGER_WRITE 0x90
-
+// Charger flags. See datasheet for details. {{{
 #define RTC2_CHARGER_DISABLE  0x0
 #define RTC2_CHARGER_ENABLED  0xA0
 #define RTC2_CHARGER_1_DIODES 0x08
@@ -53,18 +33,14 @@
 #define RTC2_CHARGER_ROUTE_1  0x1
 #define RTC2_CHARGER_ROUTE_2  0x2
 #define RTC2_CHARGER_ROUTE_3  0x3
-
-#define RTC2_BURST_READ  0xBF
-#define RTC2_BURST_WRITE 0xBE
-
-#define RTC2_BURST_MEM_READ  0xFF
-#define RTC2_BURST_MEM_WRITE 0xFE
+// }}}
 
 // You can disable clock and use just RAM/utility functions,
 // but why do you need DS1302 then?
 
 // Clock definitions {{{
 #if RTC2_READ || RTC2_WRITE
+
 typedef struct {
   // time
   uint8_t seconds;
@@ -88,47 +64,77 @@ typedef rtc2_datetime_t* rtc2_datetime;
 
 void rtc2_init(void);
 
+// Clock reading/writing functions will use burst mode
+// only if you read/write all fields and RTC2_BURST is non zero
+
 // Write (preset) functions {{{
 #if RTC2_WRITE
-void rtc2_preset(rtc2_datetime);
-void rtc2_set(rtc2_datetime, uint8_t);
+void rtc2_preset(rtc2_datetime src);
+void rtc2_set(rtc2_datetime src, uint8_t fields);
 #endif
 // }}}
 
 // Read (update) functions {{{
 #if RTC2_READ
-void rtc2_update(rtc2_datetime);
-void rtc2_get(rtc2_datetime, uint8_t);
+// gets all clock value from DS1302
+void rtc2_update(rtc2_datetime dst);
+// gets specified fields from DS1302. fields are given
+// as bitwise concatenation of RTC2_*_FIELD constants.
+// providing RTC2_ALL_FIELDS is effectively the same
+// as rtc2_update.
+void rtc2_get(rtc2_datetime dst, uint8_t fields);
 #endif
 // }}}
 
 // RAM access functions {{{
 #if RTC2_RAM
-void rtc2_mem_write_byte(uint8_t, uint8_t);
-uint8_t rtc2_mem_read_byte(uint8_t);
 
-void rtc2_mem_write(uint8_t, size_t, const void*);
-void rtc2_mem_read(uint8_t, size_t, void*);
+// offset in RAM functions is relative to RTC2_MEM_START.
+// do not pass actual address.
+// whenever those functions see that target have offset not fiting
+// into memory range they'll silently cancel.
+//
+// functions operating on memory chunks verify both first byte (offset)
+// and last byte (offset + size).
+//
+// also those functions will work in burst mode only if offset is 0
+// that is reading from beginning of memory and RTC2_BURST is non-zero.
+
+void rtc2_mem_write_byte(uint8_t offset, uint8_t value);
+uint8_t rtc2_mem_read_byte(uint8_t offset);
+
+void rtc2_mem_write(uint8_t offset, size_t size, const void *src);
+void rtc2_mem_read(uint8_t offset, size_t size, void *dst);
 
 /// RAM string helpers {{{
 #if RTC2_RAM_STRINGS
-void rtc2_mem_puts(uint8_t, const char*);
-void rtc2_mem_gets(uint8_t, size_t, char*);
+void rtc2_mem_puts(uint8_t offset, const char *src);
+void rtc2_mem_gets(uint8_t offset, size_t maxsize, char *dst);
 #endif
 // }}}
+
 #endif
 // }}}
+
+// NOTE: true_false are exactly 1 bit, if you'll pass something else
+// it can result in undesired effect.
 
 // Utility functions {{{
 #if RC2_UTILITY
-void rtc2_set_charger(uint8_t);
+// get trickle charger state. see RTC2_CHARGER_*
+// constants above and datasheet for possible results.
 uint8_t rtc2_get_charger(void);
+// sets trickle charger state. see datasheet.
+void rtc2_set_charger(uint8_t flags);
 
+// are clock/RAM values write-protected?
 uint8_t rtc2_halt(void);
-void rtc2_set_halt(uint8_t);
+// enables/disables clock/RAM write-protection
+void rtc2_set_halt(uint8_t true_false);
 
+// sets/gets clock setting protection
 uint8_t rtc2_protection(void);
-void rtc2_set_protection(uint8_t);
+void rtc2_set_protection(uint8_t true_false);
 #endif
 // }}}
 
