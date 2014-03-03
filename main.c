@@ -3,11 +3,10 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include "USART.h"
-#define RTC2_DEFAULT
 #include "rtc2.h"
 
 int main(void)	{
-  char buf[64];
+  char buf[64] = {0};
 
   initUSART();
 

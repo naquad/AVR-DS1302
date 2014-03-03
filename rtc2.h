@@ -1,3 +1,4 @@
+// vim: foldmethod=marker
 #ifndef __RTC2_H__
 #define __RTC2_H__
 
@@ -59,6 +60,11 @@
 #define RTC2_BURST_MEM_READ  0xFF
 #define RTC2_BURST_MEM_WRITE 0xFE
 
+// You can disable clock and use just RAM/utility functions,
+// but why do you need DS1302 then?
+
+// Clock definitions {{{
+#if RTC2_READ || RTC2_WRITE
 typedef struct {
   // time
   uint8_t seconds;
@@ -77,23 +83,44 @@ typedef struct {
 
 typedef rtc2_datetime_t* rtc2_datetime;
 
+#endif
+// }}}
+
 void rtc2_init(void);
 
-void rtc2_update(rtc2_datetime);
+// Write (preset) functions {{{
+#if RTC2_WRITE
 void rtc2_preset(rtc2_datetime);
-
 void rtc2_set(rtc2_datetime, uint8_t);
-void rtc2_get(rtc2_datetime, uint8_t);
+#endif
+// }}}
 
+// Read (update) functions {{{
+#if RTC2_READ
+void rtc2_update(rtc2_datetime);
+void rtc2_get(rtc2_datetime, uint8_t);
+#endif
+// }}}
+
+// RAM access functions {{{
+#if RTC2_RAM
 void rtc2_mem_write_byte(uint8_t, uint8_t);
 uint8_t rtc2_mem_read_byte(uint8_t);
 
 void rtc2_mem_write(uint8_t, size_t, const void*);
 void rtc2_mem_read(uint8_t, size_t, void*);
 
+/// RAM string helpers {{{
+#if RTC2_RAM_STRINGS
 void rtc2_mem_puts(uint8_t, const char*);
 void rtc2_mem_gets(uint8_t, size_t, char*);
+#endif
+// }}}
+#endif
+// }}}
 
+// Utility functions {{{
+#if RC2_UTILITY
 void rtc2_set_charger(uint8_t);
 uint8_t rtc2_get_charger(void);
 
@@ -102,10 +129,13 @@ void rtc2_set_halt(uint8_t);
 
 uint8_t rtc2_protection(void);
 void rtc2_set_protection(uint8_t);
-
-#ifdef RTC2_DEFAULT
-volatile rtc2_datetime_t __rtc2_default = {0};
-volatile rtc2_datetime RTC2_VALUE = &__rtc2_default;
 #endif
+// }}}
+
+// Default global variable (actually initialized pointer) {{{
+#if RTC2_DEFAULT && (RTC2_READ || RTC2_WRITE)
+volatile rtc2_datetime RTC2_VALUE;
+#endif
+// }}}
 
 #endif

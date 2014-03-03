@@ -1,13 +1,14 @@
+// vim: foldmethod=marker
 #include <avr/io.h>
 #include <util/delay.h>
-#include <string.h>
-
-#ifdef RTC2_DEFAULT // we don't need default variable here
-#undef RTC2_DEFAULT
-#endif
 
 #include "rtc2.h"
 
+#if RTC2_RAM_STRINGS
+#include <string.h>
+#endif
+
+// RTC2 utility macro handling I/O {{{
 #define RTC2_IO_OUTPUT (RTC2_DDR |= _BV(RTC2_IO))
 #define RTC2_IO_INPUT (RTC2_DDR &= ~_BV(RTC2_IO))
 #define RTC2_IO_HIGH (RTC2_PORT |= _BV(RTC2_IO))
@@ -27,6 +28,73 @@
 
 #define RTC2_START_TRANSMISSION(kind) { rtc2_reset(); rtc2_write_byte(kind); } while(0)
 #define RTC2_STOP_TRANSMISSION { RTC2_CE_LOW; RTC2_CLK_LOW; } while(0)
+// }}}
+
+// Default global variable {{{
+#if RTC2_DEFAULT && (RTC2_READ || RTC2__WRITE)
+static rtc2_datetime_t rtc2_default;
+#endif
+// }}}
+
+// Initializer. Configures I/O ports and maybe sets up global variable {{{
+void rtc2_init(void){
+  RTC2_DDR |= _BV(RTC2_CE) | _BV(RTC2_CLK) | _BV(RTC2_IO);
+  RTC2_PORT &= ~(_BV(RTC2_CE) | _BV(RTC2_CLK) | _BV(RTC2_IO));
+
+#if RTC2_DEFAULT && (RTC2_READ || RTC2__WRITE)
+  RTC2_VALUE = &rtc2_default;
+#endif
+}
+// }}}
+
+// Utility stuff used to reset current transfer state {{{
+static inline void rtc2_reset(void){
+  RTC2_STOP_TRANSMISSION;
+  RTC2_CE_HIGH;
+}
+// }}}
+
+// Low level write functions {{{
+
+// Routine used for pretty much any operation {{{
+#if RTC2_READ || RTC2_WRITE ||RTC2_RAM || RTC2_UTILITY
+static void rtc2_write_byte(uint8_t byte){
+  uint8_t i;
+
+  RTC2_IO_OUTPUT;
+
+  for(i = 0; i < 8; ++i){
+    if(byte & 1)
+      RTC2_IO_HIGH;
+    else
+      RTC2_IO_LOW;
+
+    RTC2_CLK_LOW;
+    _delay_us(2);
+    RTC2_CLK_HIGH;
+    _delay_us(2);
+    byte >>= 1;
+  }
+}
+#endif
+// }}}
+
+// Write to register {{{
+#if RTC2_WRITE || RTC2_RAM || RTC2_UTILITY
+
+static void rtc2_write(uint8_t reg, uint8_t val){
+  RTC2_START_TRANSMISSION(reg);
+  rtc2_write_byte(val);
+  RTC2_STOP_TRANSMISSION;
+}
+
+#endif
+// }}}
+
+// }}}
+
+// Low level read functions {{{
+#if RTC2_READ || RTC2_UTILITY || RTC2_RAM
 
 static uint8_t rtc2_read_byte(void){
   uint8_t i, ret = 0;
@@ -47,30 +115,6 @@ static uint8_t rtc2_read_byte(void){
   return ret;
 }
 
-static void rtc2_write_byte(uint8_t byte){
-  uint8_t i;
-
-  RTC2_IO_OUTPUT;
-
-  for(i = 0; i < 8; ++i){
-    RTC2_IO_LOW;
-
-    if(byte & 1)
-      RTC2_IO_HIGH;
-
-    RTC2_CLK_LOW;
-    _delay_us(2);
-    RTC2_CLK_HIGH;
-    _delay_us(2);
-    byte >>= 1;
-  }
-}
-
-static inline void rtc2_reset(void){
-  RTC2_STOP_TRANSMISSION;
-  RTC2_CE_HIGH;
-}
-
 static uint8_t rtc2_read(uint8_t reg){
   uint8_t ret;
   RTC2_START_TRANSMISSION(reg);
@@ -79,20 +123,11 @@ static uint8_t rtc2_read(uint8_t reg){
   return ret;
 }
 
-static void rtc2_write(uint8_t reg, uint8_t val){
-  RTC2_START_TRANSMISSION(reg);
-  rtc2_write_byte(val);
-  RTC2_STOP_TRANSMISSION;
-}
+#endif
+// }}}
 
-void rtc2_init(void){
-  RTC2_DDR |= _BV(RTC2_CE) | _BV(RTC2_CLK) | _BV(RTC2_IO);
-  RTC2_PORT &= ~(_BV(RTC2_CE) | _BV(RTC2_CLK) | _BV(RTC2_IO));
-}
-
-void rtc2_update(rtc2_datetime ptr){
-  rtc2_get(ptr, RTC2_ALL_FIELDS);
-}
+// Writing (presetting clock stuff) {{{
+#if RTC2_WRITE
 
 void rtc2_preset(rtc2_datetime ptr){
   rtc2_set(ptr, RTC2_ALL_FIELDS);
@@ -168,6 +203,16 @@ void rtc2_set(rtc2_datetime ptr, uint8_t fields){
 #if RTC2_BURST
   }
 #endif
+}
+
+#endif
+// }}}
+
+// High level decoding and reading (updating) functions {{{
+#if RTC2_READ
+
+void rtc2_update(rtc2_datetime ptr){
+  rtc2_get(ptr, RTC2_ALL_FIELDS);
 }
 
 static uint8_t rtc2_parse_val(uint8_t field, uint8_t val){
@@ -250,6 +295,12 @@ void rtc2_get(rtc2_datetime ptr, uint8_t fields){
 #endif
 }
 
+#endif
+// }}}
+
+// RAM access {{{
+#if RTC2_RAM
+
 void rtc2_mem_write_byte(uint8_t offset, uint8_t val){
   offset += RTC2_MEM_START_WRITE;
 
@@ -319,6 +370,9 @@ void rtc2_mem_read(uint8_t offset, size_t size, void *buffer){
 #endif
 }
 
+// RAM string functions {{{
+#if RTC2_RAM_STRINGS
+
 void rtc2_mem_puts(uint8_t offset, const char *str){
   rtc2_mem_write(offset, strlen(str) + 1, str);
 }
@@ -338,6 +392,15 @@ void rtc2_mem_gets(uint8_t offset, size_t maxlen, char *str){
 
   *str = 0;
 }
+
+#endif
+// }}}
+
+#endif
+// }}}
+
+// Utility functions {{{
+#if RTC2_UTILITY
 
 void rtc2_set_charger(uint8_t flags){
   rtc2_write(RTC2_CHARGER_WRITE, flags);
@@ -362,3 +425,6 @@ uint8_t rtc2_protection(void){
 void rtc2_set_protection(uint8_t v){
   rtc2_write(RTC2_WP_WRITE, v << 7);
 }
+
+#endif
+// }}}

@@ -40,8 +40,6 @@ typedef struct {
 
 You'll see that functions accept `rtc_datetime`, this is just a pointer to structure above.
 
-Library can also provide global rtc2_datetime instance. For this `#define RTC2_DEFAULT` in library config or before `#include`ing it.
-
 ### Fields list:
 
 ```
@@ -70,7 +68,7 @@ This is undested functionality. Following flags can be combined (`|`) to configu
 #define RTC2_CHARGER_ROUTE_3 0x3
 ```
 
-### Function list:
+### Function list
 
 ```
 void rtc2_init(void); // presets ports. must be called before any other function.
@@ -107,9 +105,13 @@ void rtc2_set_protection(uint8_t); // 0 - no protection, 1 - protect
 
 ```
 
+### Enabling / disabling features
+
+You can enable or disable functionality. See `rtc2.h` configuration
+for details.
+
 ## TODO
 
 * Better documentation;
-* More conditional functionality to reduce library size;
 * More testing;
 * Testing with other models of AVR and maybe other compilers;
