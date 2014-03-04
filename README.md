@@ -8,8 +8,6 @@ Library is very raw, I've tested basic functionality (clock itself, burst mode, 
 
 No support for multiple DS1302 (because of defines) and no support for interrupt-based I/O.
 
-Library provides a lot and has pretty big size (2.7K with AVR-GCC 4.8.2), in future I plan to refactor functionality so one could select only required functions. Currently removing unnecessary functionality to save some space is up to user.
-
 To make included example run get `USART.h` and `USART.c` from [hexagon5un](https://github.com/hexagon5un/AVR-Programming.git).
 
 Slightly modified `Makefile` is also his.
