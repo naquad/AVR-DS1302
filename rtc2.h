@@ -35,6 +35,12 @@
 #define RTC2_CHARGER_ROUTE_3  0x3
 // }}}
 
+// Timestamp base date {{{
+#if RTC2_TIMESTAMP
+#define RTC2_BASE_TIMESTAMP 946684800
+#endif
+// }}}
+
 // You can disable clock and use just RAM/utility functions,
 // but why do you need DS1302 then?
 
@@ -83,6 +89,26 @@ void rtc2_update(rtc2_datetime dst);
 // providing RTC2_ALL_FIELDS is effectively the same
 // as rtc2_update.
 void rtc2_get(rtc2_datetime dst, uint8_t fields);
+
+// Timestamp conversion functions {{{
+#if RTC2_TIMESTAMP
+// **WARNING1**: IT IS IN LOCAL TIMEZONE
+// **WARNING2**: Because we have unsigned chars everywhere
+// and today is 2014 after all, base line for calculation
+// is 2000/1/1 00:00:00. E.g. all dates are treated like they're
+// after the this date.
+//
+// returns UNIX timestamp (since 1970/1/1 00:00:00)
+// month starts from 1, years are two digits since 2000
+uint32_t rtc2_mktime(uint8_t seconds, uint8_t minutes, uint8_t hours, uint8_t date, uint8_t month, uint8_t year);
+// wrapper passing rtc2_datetime fields to rtc2_mktime
+uint32_t rtc2_timestamp(rtc2_datetime src);
+// populates rtc2_datetime from timestamp
+// will return 0 if timestamp is < RTC2_BASE_TIMESTAMP which is 1st January 2000
+uint8_t rtc2_localtime(rtc2_datetime dst, uint32_t timestamp);
+#endif
+//}}}
+
 #endif
 // }}}
 

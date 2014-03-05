@@ -38,6 +38,11 @@
 #define RTC2_READ 1
 #endif
 
+// enable timestamp
+#ifndef RTC2_TIMESTAMP
+#define RTC2_TIMESTAMP 1
+#endif
+
 // enable clock write functions?
 #ifndef RTC2_WRITE
 #define RTC2_WRITE 1

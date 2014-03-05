@@ -342,6 +342,108 @@ void rtc2_get(rtc2_datetime ptr, uint8_t fields){
 #endif
 }
 
+// UNIX timestamp utilities {{{
+#if RTC2_TIMESTAMP
+
+// not exactly tzdata but will do
+static uint8_t rtc2_monthes[] = {
+  31, 28, 31,
+  30, 31, 30,
+  31, 31, 30,
+  31, 30, 31
+};
+
+uint32_t rtc2_mktime(uint8_t seconds, uint8_t minutes, uint8_t hours, uint8_t date, uint8_t month, uint8_t year){
+  uint32_t ret = RTC2_BASE_TIMESTAMP; // 1st January 2000, midnight
+
+  ret += seconds;
+  ret += minutes * 60L;
+  ret += hours   * 60L * 60;
+
+  --month;
+
+  if(year) // a special case for base timestamp
+    date += (year - 1) / 4;
+  else
+    --date;
+
+  for(seconds = 0; seconds < month; ++seconds)
+    ret += rtc2_monthes[seconds] * 24L * 60 * 60;
+
+  if(month > 1 && year % 4 == 0)
+    ++date;
+
+  ret += date * 24L * 60 * 60;
+  ret += year * 365L * 24 * 60 * 60;
+
+  return ret;
+}
+
+uint32_t rtc2_timestamp(rtc2_datetime src){
+  uint32_t hours = src->hours;
+
+  if(src->format == RTC2_FORMAT_PM)
+    hours += 12;
+
+  return rtc2_mktime(
+      src->seconds, src->minutes, hours,
+      src->date,    src->month,   src->year
+  );
+}
+
+// will return 0 if timestamp is older tha RTC2_BASE_TIMESTAMP
+// which is 1st January 2000
+
+uint8_t rtc2_localtime(rtc2_datetime dst, uint32_t timestamp){
+  uint16_t i, y;
+
+  if(timestamp < RTC2_BASE_TIMESTAMP)
+    return 0;
+
+  timestamp -= RTC2_BASE_TIMESTAMP;
+
+  dst->seconds = timestamp % 60;
+  timestamp /= 60;
+  dst->minutes = timestamp % 60;
+  timestamp /= 60;
+  dst->hours = timestamp % 24;
+  timestamp /= 24;
+  dst->wday = (timestamp + 6) % 7; // because 1st January 2000 is Saturday add 6
+
+  for(y = 0; timestamp; ++y){
+    i = 365 + (y % 4 == 0);
+
+    if(timestamp < i)
+      break;
+
+    timestamp -= i;
+  }
+
+  dst->year = y;
+
+  ++timestamp;
+
+  for(i = 0; timestamp > rtc2_monthes[i]; ++i){
+    if(i == 1 && y % 4 == 0){
+      if(timestamp > 29)
+        timestamp -= 1;
+      else
+        break;
+    }
+
+    timestamp -= rtc2_monthes[i];
+  }
+
+  dst->month = i + 1;
+  dst->date = timestamp;
+  dst->format = 0;
+
+  return 1;
+}
+
+#endif
+// }}}
+
 #endif
 // }}}
 
